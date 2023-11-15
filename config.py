@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Configuration file with parameters for qsosed.py
-Parameters derived from SDSS DR16Q x UKIDSS LAS x unWISE as described in
-Temple, Hewett & Banerji (2021).
-
-Idea is to load emission line templates, host galaxy template, and extinction
-curve once to minimise i/o.
-
-@author: Matthew Temple
-Edit 2021 July: v20210625 emline_templates and associated model params
-Edit 2022 May: update reference to published paper 2021MNRAS.508..737T
+See Temple+21 QSOGEN 
 """
 import numpy as np
 
