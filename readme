@@ -1,2 +1,1 @@
-This folder contains the file needed to get the best fit parameters. It requires QSOGEN by Temple+21 (not qsogen_4_catalog) 
-and a __init__.py should be added to qsogen folder
+AGN SED routines based on QSOGEN (Temple+21)
