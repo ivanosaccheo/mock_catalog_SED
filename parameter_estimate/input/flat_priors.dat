@@ -1,0 +1,11 @@
+#comment to remove 
+Name        temple_best         low_limit  upper_limit
+plslp1         -0.349           -5.0        5.0
+plslp2          0.593           -5.0        5.0
+plbrk1          3880             1000.0     10000.0
+tbb            1243.6            600.0       2000.0
+bbnorm          3.961             0          30.0
+scal_emline    -0.9936          -5.0          5.0
+beslope         0.183            -2.0        2.0 
+#fragal          0.244             0           1
+#gplind          0.684             0           4
