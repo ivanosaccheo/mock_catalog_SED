@@ -1,4 +1,4 @@
-import os 
+import os
 import warnings
 import datetime
 import numpy as np
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from astropy import units, constants
 from astropy.cosmology import FlatLambdaCDM
 from astropy.stats import sigma_clip
-import emcee 
+import emcee
 from scipy.optimize import minimize
 from my_functions import library as lb
 from qsogen.model_colours import get_colours
@@ -45,47 +45,46 @@ def log_prior(theta, priors):
     return -np.inf
 
 def log_probability(theta, redshift, y, yerr, M_i, parameters_name, filters, priors):
-    
+
     lp = log_prior(theta, priors)
     if not np.isfinite(lp):
         return -np.inf
     ll = log_likelihood(theta, redshift, y, yerr, M_i, parameters_name, filters)
-    
+
     return lp + ll
 
-def log_likelihood(theta, redshift, y, yerr, M_i, 
+def log_likelihood(theta, redshift, y, yerr, M_i,
                    parameters_name, filters):
-    
+
     model = get_temple_colors(redshift, M_i, theta, parameters_name, filters)
-    sigma2 = yerr**2 
-    
-    return -0.5 * np.sum((y - model) ** 2 / sigma2 + np.log(sigma2))
+    sigma2 = yerr**2
 
+    S = (y - model) ** 2 / sigma2 + np.log(sigma2)
+    S = np.ma.masked_invalid(S)
 
-
-
+    return -0.5 * np.sum(S)
 
 
 class organize_colors:
 
-    def __init__(self, filename = "krawczyk_no_host_magnitudes.csv", 
+    def __init__(self, filename = "krawczyk_no_host_magnitudes.csv",
                  directory = os.path.expanduser("~/DATA/samples"),
                  **kwargs) -> None:
         self.all_magnitudes = pd.read_csv(os.path.join(directory, filename), **kwargs)
         self.all_redshift = self.all_magnitudes["Redshift"].to_numpy()
         self.today = datetime.date.today()
-    
-    def get_filters_name(self, filename = "lista_filtri.dat", directory = "input", 
-                         my_name_header = "myname", 
+
+    def get_filters_name(self, filename = "lista_filtri.dat", directory = "input",
+                         my_name_header = "myname",
                          temple_name_header= "temple_name",
                          necessary_header = "necessary"):
 
-    
-        self.filter_df = pd.read_csv(os.path.join(directory, filename), comment="#", 
+
+        self.filter_df = pd.read_csv(os.path.join(directory, filename), comment="#",
                                      delim_whitespace= True)
         self.my_filters = self.filter_df[my_name_header].to_list()
         for filtro in self.my_filters: assert(filtro in self.all_magnitudes.columns)
-        
+
         self.temple_filters = self.filter_df[temple_name_header].to_list()
         self.necessary_filters = self.filter_df[my_name_header][self.filter_df[necessary_header]].to_list()
 
@@ -97,16 +96,16 @@ class organize_colors:
         self.flat_priors = self.prior_df[["low_limit", "upper_limit"]].to_numpy()
         self.temple_best = self.prior_df["temple_best"].to_numpy()
 
-    
+
     def select_magnitudes(self):
         not_nan = ~np.isnan(self.all_magnitudes[self.necessary_filters])
         self.magnitudes = self.all_magnitudes.loc[np.logical_and.reduce(not_nan, axis=1)]
         self.redshift = self.magnitudes["Redshift"].to_numpy()
         print(f"Selecting {len(self.magnitudes)} among {len(self.all_magnitudes)} QSOs")
         self.magnitudes = self.magnitudes.drop(columns= "Redshift")
-    
+
     def get_filters(self, get_transmission = True):
-        
+
         def order_filters(filtri):
             return np.argsort([filtro.wav for filtro in filtri])
         # Ordering filters depending on their wavelength
@@ -114,13 +113,13 @@ class organize_colors:
         self.my_filters =[self.my_filters[idx] for idx in order_filters(self.filters)]
         self.temple_filters =[self.temple_filters[idx] for idx in order_filters(self.filters)]
         self.filters = [self.filters[idx] for idx in order_filters(self.filters)]
-        
+
         if get_transmission:
             for filtro in self.filters: filtro.get_transmission()
         self.magnitudes = self.magnitudes[self.my_filters]
-        
+
     def get_bins(self, user_bins = None, N_objects = None, N_bins = None, redshift_cuts = None):
-        
+
         def get_quantiles(redshift, Nbins):
             quantiles_cuts = np.arange(Nbins+1)/Nbins
             quantiles = np.quantile(redshift, quantiles_cuts)
@@ -131,7 +130,7 @@ class organize_colors:
             for cut in user_bins: assert(isinstance(cut, float))
             self.redshift_bins = user_bins
             self.Nbins = len(self.redshift_bins) #Countig also the rightmost bin
-        
+
         elif redshift_cuts is not None:
             redshift_cuts = np.array(redshift_cuts).flatten()
             self.Nbins = 0
@@ -145,7 +144,7 @@ class organize_colors:
                     quantiles.append(get_quantiles(self.redshift[idx], nbins))
                     self.Nbins += nbins
                     print(f"Grouping fixed {nobj} QSOs in {nbins} bins")
-            
+
             except TypeError:
                 print("Using fixed number of bins for each redshift cut")
                 for unique_bin, nbins in zip(np.unique(bins), N_bins, strict = True):
@@ -154,10 +153,10 @@ class organize_colors:
                     quantiles.append(get_quantiles(self.redshift[idx], nbins))
                     self.Nbins += nbins
                     print(f"Grouping {nobj} QSOs in fixed {nbins} bins")
-            
-            #L'ultimo elemnto di un quantile è equivalente al primo del successivo 
+
+            #L'ultimo elemnto di un quantile è equivalente al primo del successivo
             self.redshift_bins = np.hstack([i[:-1] for i in quantiles])
-        
+
         else:
             try:
                 assert isinstance(N_objects, int)
@@ -166,15 +165,15 @@ class organize_colors:
             except AssertionError:
                 assert isinstance(N_bins, int)
                 self.Nbins = N_bins
-            
+
             self.redshift_bins = get_quantiles(self.redshift, self.Nbins)
 
-           
+
     def get_luminosity(self, H0 = 70, Om0 = 0.3, magnitudes_are_vega = False):
         cosmo = FlatLambdaCDM(H0 = H0, Om0 = Om0)
         self.luminosity_distance = cosmo.luminosity_distance(self.redshift).cgs.value
         L = np.zeros((self.magnitudes.shape))
-        
+
         if magnitudes_are_vega:
             vega_to_AB = [0, 0, 0, 0, 0,   #SDSS are AB
                           0.6147726766033728, 0.9152606087248839, 1.3520471317250795,  1.8713980229183953, #UKIDSS
@@ -183,27 +182,27 @@ class organize_colors:
             for col, conversion in zip(self.magnitudes.columns, vega_to_AB):
                 print(col, conversion)
                 self.magnitudes[col] += conversion
-        
+
         for i, col in enumerate(self.magnitudes):
             L[:,i] = (10**(-0.4*(self.magnitudes[col]+48.6))) * 2.998e18/self.filters[i].wav
             L[:,i] = L[:,i] * 4 *np.pi * self.luminosity_distance**2
         self.luminosity = np.zeros((self.magnitudes.shape[0], self.magnitudes.shape[1], 2))
-        
+
         for i in range(L.shape[1]):
             self.luminosity[:,i,0] = self.filters[i].wav/(self.redshift+1)
             self.luminosity[:,i,1] = L[:,i]
-        
+
         if magnitudes_are_vega:
             print("Transforming magnitudes back to Vega")
             for col, conversion in zip(self.magnitudes.columns, vega_to_AB):
                 self.magnitudes[col] -= conversion   #back to vega
-       
-    
+
+
     def get_mono_luminosity(self, *wavelengths, out_of_bounds = "extrapolate"):
         if not hasattr(self, "mono_luminosity"):
             self.mono_luminosity = pd.DataFrame()
         for wavelength in wavelengths:
-            self.mono_luminosity[f"L_{str(wavelength)}"] =  lb.monochromatic_lum(self.luminosity, 
+            self.mono_luminosity[f"L_{str(wavelength)}"] =  lb.monochromatic_lum(self.luminosity,
                                                                            wavelength, out_of_bounds = out_of_bounds)
 
     def get_M_i(self):
@@ -214,7 +213,7 @@ class organize_colors:
              self.get_luminosity(2500)
         self.M_i = ( -2.5 * np.log10(self.mono_luminosity["L_2500"] * 2500 / 2.998e18) + 2.5 * np.log10(4*np.pi)
                      + 5 * np.log10(10 * constants.pc.cgs.value) - 2.5 * np.log10(1+2) -48.6)
-                      
+
 
     def get_colors(self):
         self.all_colors = pd.DataFrame()
@@ -242,18 +241,18 @@ class organize_colors:
                 for n_bin, (z_low, z_high) in enumerate(zip(self.redshift_bins[:-1], self.redshift_bins[1:])):
                     if np.logical_or(z_low < z_min, z_high > z_max):
                         self.colors[color][self.bin == n_bin +1 ] = np.nan
-                if self.redshift_bins[-1] > z_max:   #for cycle miss the last bin 
+                if self.redshift_bins[-1] > z_max:   #for cycle miss the last bin
                     self.colors[color][self.bin == self.Nbins] = np.nan
-                    
+
         else:
             for i, color in enumerate(self.colors):
                 filter_1, filter_2 = self.filters[i], self.filters[i+1]
                 z_min, z_max = where_to_ignore(filter_1, filter_2, wavelength_min, wavelength_max)
                 self.colors[color][np.logical_or(self.redshift < z_min, self.redshift>z_max)] = np.nan
 
-    
+
     def plot_colors(self, savename = "",
-                    directory = "Plot", 
+                    directory = "Plot",
                     all_colors = True, **kwargs):
         if not os.path.isdir(directory):
             os.mkdir(directory)
@@ -267,7 +266,7 @@ class organize_colors:
             for cut in self.redshift_bins:
                 ax.plot([cut, cut], [ymin, ymax], 'k:', lw = 0.5)
             if hasattr(self, "all_mean_values"):
-                ax.errorbar(self.all_mean_values[:, i, 0], self.all_mean_values[:, i, 1], 
+                ax.errorbar(self.all_mean_values[:, i, 0], self.all_mean_values[:, i, 1],
                             yerr =self.all_mean_values[:, i, 3], ls ="none", marker = 'o', c='k')
             ax.set_ylim(-1, 1)
             ax.set_xlim(0, np.max(self.redshift))
@@ -277,7 +276,7 @@ class organize_colors:
 
     def assign_bin(self, right = False):
         self.bin = np.digitize(self.redshift, self.redshift_bins, right == right)
-    
+
     def plot_redshift_distributions(self, savename = "Redshift_distribution",
                                   directory = "Plot", **kwargs):
         if not os.path.isdir(directory):
@@ -287,7 +286,7 @@ class organize_colors:
         ax.hist(self.redshift, bins = self.redshift_bins, **kwargs)
         ax.set_xlabel("Redshift")
         plt.savefig(os.path.join(directory, savename+format), format ="png", bbox_inches = "tight")
-    
+
     def get_bin_mean(self, clipping_sigma = 3):
         #axis = 0 redshift bins
         #axis = 1 colors
@@ -295,15 +294,15 @@ class organize_colors:
         self.all_mean_values = np.zeros((self.Nbins, len(self.colors.columns), 4))
         self.mean_M_i = np.zeros(self.Nbins)
         for i in range(1,self.Nbins+1):
-            
+
             redshift = self.redshift[self.bin == i]
             colors = self.colors[self.bin==i]
-            masked_M_i = sigma_clip(self.M_i[self.bin == i], copy = True, 
+            masked_M_i = sigma_clip(self.M_i[self.bin == i], copy = True,
                                     sigma = clipping_sigma)
             self.mean_M_i[i-1] = masked_M_i.mean()
 
             for j, color in enumerate(colors):
-                masked_color = sigma_clip(colors[color], copy = True, 
+                masked_color = sigma_clip(colors[color], copy = True,
                                           sigma= clipping_sigma)
                 masked_redshift = np.ma.array(redshift, mask = masked_color.mask)
                 self.all_mean_values[i-1, j, 0] = masked_redshift.mean()
@@ -320,12 +319,12 @@ class organize_colors:
             if replace:
                 self.mean_values[color] = self.mean_values[color].replace(np.nan, 0)
                 self.mean_values[f"err_{color}"] = self.mean_values[f"err_{color}"].replace(np.nan, -99)
-        
+
     def plot_M_i(self, savename = "M_i", directory = "Plot", plot_temple = False, **kwargs):
-        
+
         if not os.path.isdir(directory):
             os.mkdir(directory)
-        
+
         format = ".png"
 
         ymin ,ymax = np.min(self.M_i), np.max(self.M_i)
@@ -333,44 +332,40 @@ class organize_colors:
         ax.scatter(self.redshift, self.M_i, c = "teal", s = 1)
         for cut in self.redshift_bins:
             ax.plot([cut, cut], [ymin, ymax], 'k:', lw = 0.5)
-            
+
         if hasattr(self, "mean_values"):
             ax.errorbar(self.mean_values["Redshift"], self.mean_M_i,
                             ls ="none", c = "k", marker ="o")
-        
+
         if plot_temple:
-            
+
             M_i_temple = np.loadtxt("input/Mi_temple.dat")
             ax.scatter(M_i_temple[:,0], M_i_temple[:,1], marker = "p", c = "r", s = 25, zorder = 5)
-            
-        
+
+
         ax.set_xlabel("Redshift")
         ax.set_ylabel("M_i")
         ax.set_ylim(ymin ,ymax)
         plt.savefig(os.path.join(directory, savename+format), bbox_inches = "tight")
 
-    def get_fitting_arrays(self, replace = True, scale_sigma = 1):
+    def get_fitting_arrays(self, scale_sigma = 1):
         self.x_fit =  np.nanmedian(self.all_mean_values[:, :, 0], axis = 1)
         self.y_fit = np.zeros((len(self.mean_values), len(self.colors.columns)))
         self.yerr_fit = np.zeros_like(self.y_fit)
         for i, _ in enumerate(self.colors.columns):
             self.y_fit[:,i] = self.all_mean_values[:, i, 1]
             self.yerr_fit[:,i] = scale_sigma*self.all_mean_values[:, i, 3]
-        if replace:
-            self.y_fit[np.isnan(self.y_fit)] = 0
-            self.yerr_fit[np.isnan(self.yerr_fit)] = 99
-    
-    
+
     def get_scipy_fitting(self):
-        
-        self.scipy_args = (self.x_fit, self.y_fit, self.yerr_fit,      
+
+        self.scipy_args = (self.x_fit, self.y_fit, self.yerr_fit,
                            self.mean_M_i, self.parameters, self.temple_filters)
-        
+
         self.scipy_results = minimize(least_square, self.temple_best, args = self.scipy_args)
-        
+
     def plot_scipy_fitting(self, savename = "Least_squares", directory = "Plot",
                             normalization = 2500, krawczyk = True,  **kwargs):
-        
+
         if not os.path.isdir(directory):
             os.mkdir(directory)
         sed = get_temple_sed(0, self.scipy_results.x, self.parameters)
@@ -395,18 +390,18 @@ class organize_colors:
         if hasattr(self, "scipy_results"):
             for i, name in enumerate(self.parameters):
                 print(f"{name} : {self.scipy_results.x[i]}")
-   
 
-        
+
+
     def emcee_fitting(self, filename = "fitting", directory = "MC_chains",
                       add_date = True,
                       nwalkers = 200, nsteps = 750, starting_noise = 1e-3):
-        
-        self.emcee_args = (self.x_fit, self.y_fit, self.yerr_fit,      
+
+        self.emcee_args = (self.x_fit, self.y_fit, self.yerr_fit,
                            self.mean_M_i, self.parameters, self.temple_filters, self.flat_priors)
-        
+
         coordinates = self.scipy_results.x + starting_noise * np.random.randn(nwalkers, len(self.parameters))
-        
+
         _, ndim = coordinates.shape
 
         if not os.path.isdir(directory):
@@ -416,12 +411,11 @@ class organize_colors:
             filename = f"{filename}_{self.today}.h5"
         else:
             filename = f"{filename}.h5"
-        
+
         backend = emcee.backends.HDFBackend(os.path.join(directory,filename))
         backend.reset(nwalkers, ndim)
 
-        self.sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
+        self.sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability,
                                              args = self.emcee_args, backend=backend)
 
         self.sampler.run_mcmc(coordinates, nsteps, progress = True);
-
