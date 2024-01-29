@@ -52,7 +52,7 @@ class Quasar_sed:
         Luminosity per unit wavelength from AGN before reddening
         
     Lbol : float
-        Bolometric luminosities between 0 A° and 1e6 A° by default
+        Bolometric luminosities between 12.4 A° and 1e4 A° by default
     
 
 
@@ -64,9 +64,11 @@ class Quasar_sed:
                  ebv = 0,
                  physical_units = False,
                  add_infrared = True,
-                 compute_Lbol = True, 
                  wavlen=np.logspace(2.7, 4.48, num=20001, endpoint=True),
                  LogL2kev = None,
+                 emline_scatter = 0,
+                 bbnorm_scatter = 0,
+                 add_NL = True,
                  gflag = False,
                  **kwargs):
         """Initialises an instance of the Quasar SED model.
@@ -77,8 +79,8 @@ class Quasar_sed:
             Monochromatic luminosity at 2500A [erg/s Hz^{-1}] of (unreddened) quasar model. 
             The one given by Lusso+10 formula
         
-        type : int, 1 or 2 
-             Not yet implemented, AGN type to assign the correct emission lines.
+        AGN_type : int, 1 or 2 
+             , AGN type to assign the correct emission lines.
         
         ebv : float, optional
             Extinction E(B-V) applied to quasar model. Not applied to galaxy
@@ -100,6 +102,14 @@ class Quasar_sed:
         LogL2kev : float, optional
             Monochromatic luminosity at 2 keV [erg/s Hz^{-1}]. 
             Necessary only to compute the bolometric luminosity
+        
+        emline_scatter : float, optional,
+            Scatter to add to emline_type parameter
+            emline_type_new ~N(emline_type, emline_scatter)
+        
+        bbnorm_scatter : float, optional
+            Same as emline_scatter but for bbnorm parameter
+
 
 
         Other Parameters
@@ -162,6 +172,7 @@ class Quasar_sed:
         self.M_i = -2.5 * self.LogL2500 -48.6 + 2.5*np.log10(4*np.pi) + 5 *       np.log10(constants.pc.cgs.value) 
         self.LogL2kev = LogL2kev
         self.add_parameters(**kwargs)
+        self.bbnorm += np.random.normal(loc = 0, scale = bbnorm_scatter)
 
         #######################################################
         # READY, SET, GO!
@@ -178,20 +189,18 @@ class Quasar_sed:
         
         self.convert_fnu_flambda()
         
-       
-        
-        
         if self.AGN_type == 1:
-            self.add_emission_lines_type_1()
+            self.add_emission_lines_type_1(emline_scatter = emline_scatter)
         
         self.unextincted_luminosity_density = deepcopy(self.lum_dens.astype("float64")) # erg/s A^-1
+      
+        self.compute_Lbol(wavlen_min = 12.4, wavlen_max = 1e4)
 
-        self.compute_emission_lines_type_2() #  type 2 normalizatiomn 
-        
         if self.ebv:
             self.redden_spectrum()
         
-        self.add_emission_lines_type_2()
+        if add_NL:
+            self.add_emission_lines_type_2()
 
         self.lum_dens = self.lum_dens.astype("float64") #non capisco perchè 
 
@@ -212,16 +221,13 @@ class Quasar_sed:
 
         self.lum = self.lum_dens * (2.998e18/self.wavlen)
         
-        if compute_Lbol:
-            
-            self.compute_Lbol()
-        
-
         if physical_units:
             self.lum *= u.erg/u.s
             self.wavlen *= u.angstrom
             self.lum_dens *= u.erg/(u.s * u.Hz)
             self.host_galaxy_lum_dens *= u.erg/(u.s * u.Hz)
+        
+        return None
         
 
     def wav2num(self, wav):
@@ -345,7 +351,7 @@ class Quasar_sed:
         
         
 
-    def add_emission_lines_type_1(self, wavnrm=5500, wmin=6000, wmax=7000):
+    def add_emission_lines_type_1(self, emline_scatter = 0, wavnrm=5500, wmin=6000, wmax=7000):
         """Add emission lines to the model SED.
 
         Emission-lines are included via 4 emission-line templates, which are
@@ -379,6 +385,7 @@ class Quasar_sed:
                 self.emline_type = 0.  # default median emlines
 
         varlin = self.emline_type
+        varlin += np.random.normal(loc=0, scale = emline_scatter)
 
         linwav, medval, conval, pkyval, wdyval, _ = self.emline_template
 
@@ -426,33 +433,17 @@ class Quasar_sed:
             self.lum_dens[self.lum_dens < 0.0] = 0.0
     
 
-    def compute_emission_lines_type_2(self, wavnrm = 5500):
-        """Just a copy of add_emission_lines_type_2 with Narrow line regio template"""
-        
-        scanlr = self.scal_nlr
 
-        linwav, _, conval, _, _, nlr = self.emline_template
-        linval = (scanlr-1.)*nlr
-
-        # remove negative dips from extreme extrapolation (i.e. abs(varlin)>>1)
-        linval[(linwav > 4930) & (linwav < 5030) & (linval < 0.)] = 0.
-        linval[(linwav > 1150) & (linwav < 1200) & (linval < 0.)] = 0.
-
-        linval = np.interp(self.wavlen, linwav, linval)
-        conval = np.interp(self.wavlen, linwav, conval)
-
-        # Intensity scaling
-        self.nlr_template = (linval *
-                          self.lum_dens[self.wav2num(wavnrm)] /
-                          conval[self.wav2num(wavnrm)])
-        
-        
     def add_emission_lines_type_2(self):
         
-        self.lum_dens += self.nlr_template
-            # Ensure that -ve portion of emission line spectrum hasn't
-            # resulted in spectrum with -ve fluxes
-        self.lum_dens[self.lum_dens < 0.0] = 0.0
+        nlr_template = np.interp(self.wavlen, self.nlr_template[:,0],self.nlr_template[:,1])
+
+        #self.AD_luminosity = 10**(self.LogL2500+15.56778047) ##valid for al = -1.7
+        self.AD_luminosity = 10**(self.LogL2500+15.67097221)  ## valid for al = -1.4
+        
+        self.lum_dens += self.AD_luminosity*nlr_template
+        
+        return None
         
     
     
@@ -556,17 +547,24 @@ class Quasar_sed:
         
         return None 
     
-    def compute_Lbol(self, wavlen_min = 0, wavlen_max = 1e6):
-        
-        self.get_full_SED()
-        idx = np.logical_and(self.fullsed_wavlen>=wavlen_min, self.fullsed_wavlen<=wavlen_max)
-        self.Lbol = np.trapz(self.fullsed_luminosity_density[idx], self.fullsed_wavlen[idx])
+    def compute_Lbol(self, wavlen_min = 12.4, wavlen_max = 1e4):
+
+        if self.LogL2kev is not None:
+            self.get_full_SED()
+            idx = np.logical_and(self.fullsed_wavlen>=wavlen_min, self.fullsed_wavlen<=wavlen_max)
+            self.Lbol = np.trapz(self.fullsed_luminosity_density[idx], self.fullsed_wavlen[idx])
+        else:
+            #L2500 = 10**(self.LogL2500)*(2.998e18/2500)
+            #self.Lbol= 1.85 +0.98*np.log10(L2500)   ##Runnoe+11, actually it is the 3000A° BC
+            self.Lbol = 0.94661791*self.LogL2500 + 17.31730527 #Assumes Lusso+10 x-ray-to-Uv ratio
+            self.Lbol = 10**self.Lbol
         
         return None
     
+    
     def compute_BC(self, wavelength):
         
-        return self.Lbol/self.monochromatic_luminosity( wavelength)
+        return self.Lbol/self.monochromatic_luminosity(wavelength)
         
         
     def add_parameters(self, **kwargs):
@@ -589,12 +587,11 @@ class Quasar_sed:
         self.emline_type = _params['emline_type']
         self.scal_halpha = _params['scal_halpha']
         self.scal_lya = _params['scal_lya']
-        self.scal_nlr = _params['scal_nlr']
-
         self.emline_template = _params['emline_template']
         self.reddening_curve = _params['reddening_curve']
         self.galaxy_template = _params['galaxy_template']
         self.ir_sed = _params['ir_sed']
+        self.nlr_template = _params['nlr_template']
 
         self.beslope = _params['beslope']
         self.benorm = _params['benorm']

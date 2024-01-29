@@ -4,6 +4,7 @@
 See Temple+21
 """
 import numpy as np
+import glob
 
 f1 = 'qsogen_4_catalog/emission_lines.dat'
 emline_template = np.genfromtxt(f1, unpack=True)
@@ -24,6 +25,10 @@ reddening_curve = np.genfromtxt(f3, unpack=True)
 f4 = "qsogen_4_catalog/krawczyk_13.sed"
 krawczyk_sed = np.genfromtxt(f4)
 
+f5 = np.random.choice(glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*"))
+#f5 = glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*")[0]
+narrow_line_template = np.genfromtxt(f5, unpack=False)
+
 # fit to DR16Q median 2sigma-clipped colours in multi-imag bins
 params = dict(plslp1=-0.349,
               plslp2=0.593,
@@ -41,6 +46,7 @@ params = dict(plslp1=-0.349,
               galaxy_template= galaxy_template,
               reddening_curve = reddening_curve,
               ir_sed = krawczyk_sed,
+              nlr_template = narrow_line_template,
               zlum_lumval=np.array([[0.23, 0.34, 0.6, 1.0, 1.4, 1.8, 2.2,
                                      2.6, 3.0, 3.3, 3.7, 4.13, 4.5],
                                     [-21.76, -22.9, -24.1, -25.4, -26.0,
