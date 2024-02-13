@@ -436,12 +436,18 @@ class Quasar_sed:
 
     def add_emission_lines_type_2(self):
         
+        if self.nlr_template_idx is not None:
+            self.nlr_template = np.genfromtxt(self.nlr_template_list[self.nlr_template_idx], unpack=False)  
+        
+        else:
+            self.nlr_template = np.genfromtxt(np.random.choice(self.nlr_template_list), unpack=False)
+
         nlr_template = np.interp(self.wavlen, self.nlr_template[:,0],self.nlr_template[:,1])
 
         #self.AD_luminosity = 10**(self.LogL2500+15.56778047) ##valid for al = -1.7
         self.AD_luminosity = 10**(self.LogL2500+15.67097221)  ## valid for al = -1.4
         
-        self.lum_dens += self.AD_luminosity*nlr_template
+        self.lum_dens += (self.AD_luminosity*nlr_template)
         
         return None
         
@@ -591,7 +597,8 @@ class Quasar_sed:
         self.reddening_curve = _params['reddening_curve']
         self.galaxy_template = _params['galaxy_template']
         self.ir_sed = _params['ir_sed']
-        self.nlr_template = _params['nlr_template']
+        self.nlr_template_list = _params['nlr_template_list']
+        self.nlr_template_idx = _params["nlr_template_idx"]
 
         self.beslope = _params['beslope']
         self.benorm = _params['benorm']
