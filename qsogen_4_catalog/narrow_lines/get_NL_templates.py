@@ -16,7 +16,8 @@ def get_reduced_table(directory = "", master_fname = "A_Feltre_master.dat",
                       alpha_list = [-1.4,  -1.7],
                       met_list = [0.008, 0.014, 0.017, 0.020, 0.030, 0.040],
                       nh_list = [3],
-                      xi_list = [0.3]):
+                      xi_list = [0.3], 
+                      normalize = "OIII_4959"):
     lines = pd.read_csv(os.path.join(directory, master_fname), delim_whitespace = True)
     u_cond = np.isin(lines["logU"], logU_list)
     met_cond = np.isin(lines["Z"], met_list)
@@ -24,6 +25,9 @@ def get_reduced_table(directory = "", master_fname = "A_Feltre_master.dat",
     nh_cond = np.isin(lines["lnh"], nh_list)
     xi_cond = np.isin(lines["xi"], xi_list)
 
+    if normalize is not None:
+        lines.iloc[:, 5:] -= lines[normalize].to_numpy()[:, None]
+    
     return lines[np.logical_and.reduce([u_cond, met_cond, al_cond, nh_cond, xi_cond])]
 
 
@@ -67,8 +71,8 @@ def get_template(wavlen, line_wavlen, line_lum, fwhm):
 
 
 
-table = pd.read_csv("A_Feltre_reduced.dat", sep =' ')
-print_templates(table)
+#table = pd.read_csv("A_Feltre_reduced.dat", sep =' ')
+#print_templates(table)
 
 
 

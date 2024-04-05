@@ -28,7 +28,8 @@ krawczyk_sed = np.genfromtxt(f4)
 #f5 = np.random.choice(glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*"))
 #f5 = glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*")[0]
 #narrow_line_template = np.genfromtxt(f5, unpack=False)
-narrow_line_template_list  = glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*")
+narrow_line_template_list_feltre  = glob.glob("qsogen_4_catalog/narrow_lines/NL_templates/nlr*")
+narrow_line_template_list_scaled  = glob.glob("qsogen_4_catalog/narrow_lines/NL_templates_OIII/nlr*")
 
 # fit to DR16Q median 2sigma-clipped colours in multi-imag bins
 params = dict(plslp1=-0.349,
@@ -47,7 +48,8 @@ params = dict(plslp1=-0.349,
               galaxy_template= galaxy_template,
               reddening_curve = reddening_curve,
               ir_sed = krawczyk_sed,
-              nlr_template_list = narrow_line_template_list,
+              nlr_template_list_feltre = narrow_line_template_list_feltre,
+              nlr_template_list_scaled = narrow_line_template_list_scaled,
               nlr_template_idx = None, 
               zlum_lumval=np.array([[0.23, 0.34, 0.6, 1.0, 1.4, 1.8, 2.2,
                                      2.6, 3.0, 3.3, 3.7, 4.13, 4.5],

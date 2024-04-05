@@ -69,6 +69,7 @@ class Quasar_sed:
                  emline_scatter = 0,
                  bbnorm_scatter = 0,
                  add_NL = True,
+                 NL_normalization = "lamastra",
                  gflag = False,
                  **kwargs):
         """Initialises an instance of the Quasar SED model.
@@ -110,7 +111,9 @@ class Quasar_sed:
         bbnorm_scatter : float, optional
             Same as emline_scatter but for bbnorm parameter
 
-
+        NL_normalization : string, either lamastra or feltre
+            Hpow to normalize the narrow lines. with the OIII relationship by Lamastra+09 or with the 
+            accretion-disk linear relationship used by Feltre
 
         Other Parameters
         ----------------
@@ -171,6 +174,7 @@ class Quasar_sed:
         self.AGN_type = AGN_type 
         self.M_i = -2.5 * self.LogL2500 -48.6 + 2.5*np.log10(4*np.pi) + 5 *       np.log10(constants.pc.cgs.value) 
         self.LogL2kev = LogL2kev
+        self.NL_normalization = NL_normalization
         self.add_parameters(**kwargs)
         self.bbnorm += np.random.normal(loc = 0, scale = bbnorm_scatter)
 
@@ -434,20 +438,29 @@ class Quasar_sed:
     
 
 
-    def add_emission_lines_type_2(self):
+    def add_emission_lines_type_2(self, normalization = "lamastra"):
         
         if self.nlr_template_idx is not None:
             self.nlr_template = np.genfromtxt(self.nlr_template_list[self.nlr_template_idx], unpack=False)  
-        
         else:
             self.nlr_template = np.genfromtxt(np.random.choice(self.nlr_template_list), unpack=False)
 
         nlr_template = np.interp(self.wavlen, self.nlr_template[:,0],self.nlr_template[:,1])
-
-        #self.AD_luminosity = 10**(self.LogL2500+15.56778047) ##valid for al = -1.7
-        self.AD_luminosity = 10**(self.LogL2500+15.67097221)  ## valid for al = -1.4
         
-        self.lum_dens += (self.AD_luminosity*nlr_template)
+        
+        if self.NL_normalization == "lamastra":
+            if self.LogL2kev is None:
+                LogL210 = self.get_integrated_xray_luminosity(self.get_L2kev())
+            else:
+                LogL210 = self.get_integrated_xray_luminosity(self.LogL2kev)
+
+            L_oiii = (LogL210-43.11)/1.02 +42
+            self.lum_dens += ((10**L_oiii)*nlr_template)
+
+        elif self.NL_normalization == "feltre":
+            #self.AD_luminosity = 10**(self.LogL2500+15.56778047) ##valid for al = -1.7
+            self.AD_luminosity = 10**(self.LogL2500+15.67097221)  ## valid for al = -1.4
+            self.lum_dens += (self.AD_luminosity*nlr_template)
         
         return None
         
@@ -571,6 +584,26 @@ class Quasar_sed:
     def compute_BC(self, wavelength):
         
         return self.Lbol/self.monochromatic_luminosity(wavelength)
+    
+
+    def get_L2kev(self):
+    ##Lusso+16
+        return 0.642*self.LogL2500 +6.965
+    
+
+    def get_integrated_xray_luminosity(self, log_L_1, wavlen_1 = 6.2, wavlen_2 = 1.24, gamma = 1.8):
+        ###it computes the integrated luminosity between wavlen_1 and wavlen_2
+        ###log_L_1 is in erg/s hz^-1
+        ### L_lambda ~ lambda^gamma-3
+        log_L_1_lambda = log_L_1 - np.log10(wavlen_1*wavlen_1/2.998e18)
+        log_norm = log_L_1_lambda - (gamma-3)*np.log10(wavlen_1)
+        if wavlen_1 >= wavlen_2:
+            temp = np.log10((wavlen_1**(gamma-2)- wavlen_2**(gamma-2))/(gamma-2))
+            
+        else:
+            temp = np.log10((wavlen_2**(gamma-2) - wavlen_1**(gamma-2))/(gamma-2))
+        return log_norm +temp
+    
         
         
     def add_parameters(self, **kwargs):
@@ -597,7 +630,10 @@ class Quasar_sed:
         self.reddening_curve = _params['reddening_curve']
         self.galaxy_template = _params['galaxy_template']
         self.ir_sed = _params['ir_sed']
-        self.nlr_template_list = _params['nlr_template_list']
+        if self.NL_normalization =="lamastra":
+            self.nlr_template_list = _params['nlr_template_list_scaled']
+        else:
+            self.nlr_template_list = _params['nlr_template_list_feltre']
         self.nlr_template_idx = _params["nlr_template_idx"]
 
         self.beslope = _params['beslope']
