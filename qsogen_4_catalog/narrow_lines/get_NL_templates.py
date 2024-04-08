@@ -33,7 +33,8 @@ def get_reduced_table(directory = "", master_fname = "A_Feltre_master.dat",
 
 def print_templates(table,  save_directory = "NL_templates",
                     fwhm_list = [500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0],
-                    wavlen = np.logspace(3, 4, 2000)):
+                    wavlen = np.logspace(3, 4, 2000),
+                    remove_zeros = True):
     if not os.path.isdir(save_directory):
         os.mkdir(save_directory)
 
@@ -56,6 +57,9 @@ def print_templates(table,  save_directory = "NL_templates",
             template = get_template(wavlen,line_wavlen,
                                     line_lum, fwhm)
             template = np.vstack([wavlen.T, template.T]).T
+            if remove_zeros:
+                template = template[template[:,1]>0, :]
+            
             fname = f"nlr_{logU}_{Z}_{xi}_{lnh}_{al}_{fwhm}.dat"
             np.savetxt(os.path.join(save_directory, fname), template)
 
@@ -74,8 +78,8 @@ def get_template(wavlen, line_wavlen, line_lum, fwhm):
 #table = pd.read_csv("A_Feltre_reduced.dat", sep =' ')
 
 table = get_reduced_table(directory = "", master_fname = "A_Feltre_master.dat",
-                        normalize = None)
-print_templates(table, save_directory = "NL_templates",
+                        normalize = "OIII_5007")
+print_templates(table, save_directory = "NL_templates_OIII",
                 wavlen = np.logspace(3, np.log10(13000), 10000))
 
 
