@@ -28,6 +28,18 @@ def bb(tbb, wav):
     return (wav**(-3))/(np.exp(1.43877735e8 / (tbb*wav)) - 1.0)
 
 
+def calzetti_2000(wavlen, Rv = 4.05):
+    k_lambda = np.ones(len(wavlen))
+    logic = (wavlen <= 6300)
+    l1 =  wavlen[logic]/1e4
+    l2 = wavlen[~logic]/1e4
+    k_lambda[logic] =  2.659*(-2.156 + 1.509/l1 - 0.198/(l1*l1) +0.011/(l1*l1*l1)) + Rv
+    k_lambda[~logic] = 2.659*(-1.857 +1.040/l2) + Rv
+    k_lambda[k_lambda<0] = 0
+    return k_lambda
+
+
+
 class Quasar_sed:
     """Construct an instance of the quasar SED model.
 
@@ -81,7 +93,7 @@ class Quasar_sed:
             The one given by Lusso+10 formula
         
         AGN_type : int, 1 or 2 
-             , AGN type to assign the correct emission lines.
+            AGN type to assign the correct emission lines.
         
         ebv : float, optional
             Extinction E(B-V) applied to quasar model. Not applied to galaxy
@@ -93,7 +105,6 @@ class Quasar_sed:
         add_infrared : Bool, optional
             If True the SED is prolonged in the IR using Krawczyk+13 mean SED
   
-      
         wavlen : ndarray, optional
             Rest-frame wavelength array. Default is log-spaced array covering
             ~500 to 30000 Angstroms. `wavlen` must be monotonically increasing,
@@ -111,8 +122,11 @@ class Quasar_sed:
         bbnorm_scatter : float, optional
             Same as emline_scatter but for bbnorm parameter
 
+        add_NL : bool, optional
+            Whether or not to add the narrow emission lines
+            
         NL_normalization : string, either lamastra or feltre
-            Hpow to normalize the narrow lines. with the OIII relationship by Lamastra+09 or with the 
+            How to normalize the narrow lines. with the OIII relationship by Lamastra+09 or with the 
             accretion-disk linear relationship used by Feltre
 
         Other Parameters
@@ -438,7 +452,7 @@ class Quasar_sed:
     
 
 
-    def add_emission_lines_type_2(self, normalization = "lamastra"):
+    def add_emission_lines_type_2(self):
         
         if self.nlr_template_idx is not None:
             self.nlr_template = np.genfromtxt(self.nlr_template_list[self.nlr_template_idx], unpack=False)  
@@ -447,6 +461,9 @@ class Quasar_sed:
 
         nlr_template = np.interp(self.wavlen, self.nlr_template[:,0],self.nlr_template[:,1])
         
+        a_lambda = calzetti_2000(self.wavlen, Rv = 3.33)*self.Av_lines/3.33
+        
+        nlr_template = nlr_template*(10**(-0.4*a_lambda))
         
         if self.NL_normalization == "lamastra":
             if self.LogL2kev is None:
@@ -465,8 +482,6 @@ class Quasar_sed:
         return None
         
     
-    
-
     
     
     def host_galaxy(self, gwnmin=4000.0, gwnmax=5000.0):
@@ -641,6 +656,7 @@ class Quasar_sed:
         self.bcnorm = _params['bcnorm']
         self.fragal = _params['fragal']
         self.gplind = _params['gplind'] 
+        self.Av_lines = _params["Av_lines"]
         
         return None
         
