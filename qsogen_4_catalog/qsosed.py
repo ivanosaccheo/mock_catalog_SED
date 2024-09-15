@@ -560,6 +560,8 @@ class Quasar_sed:
     
     
     def get_full_SED(self, photon_index = 1.8):
+        
+
         L2kev = (10**self.LogL2kev)*2.998e18/(6.2*6.2)      #Flambda
         
         xray_wav = np.logspace(-0.39, 1.1, 30) #1-30 keV
@@ -583,15 +585,16 @@ class Quasar_sed:
     
     def compute_Lbol(self, wavlen_min = 12.4, wavlen_max = 1e4):
 
-        if self.LogL2kev is not None:
-            self.get_full_SED()
-            idx = np.logical_and(self.fullsed_wavlen>=wavlen_min, self.fullsed_wavlen<=wavlen_max)
-            self.Lbol = np.trapz(self.fullsed_luminosity_density[idx], self.fullsed_wavlen[idx])
-        else:
-            #L2500 = 10**(self.LogL2500)*(2.998e18/2500)
-            #self.Lbol= 1.85 +0.98*np.log10(L2500)   ##Runnoe+11, actually it is the 3000A° BC
-            self.Lbol = 0.94661791*self.LogL2500 + 17.31730527 #Assumes Lusso+10 x-ray-to-Uv ratio
-            self.Lbol = 10**self.Lbol
+        if self.LogL2kev is None:
+            self.LogL2kev = self.get_L2kev()
+        self.get_full_SED()
+        idx = np.logical_and(self.fullsed_wavlen>=wavlen_min, self.fullsed_wavlen<=wavlen_max)
+        self.Lbol = np.trapz(self.fullsed_luminosity_density[idx], self.fullsed_wavlen[idx])
+        #else:
+        #    #L2500 = 10**(self.LogL2500)*(2.998e18/2500)
+        #    #self.Lbol= 1.85 +0.98*np.log10(L2500)   ##Runnoe+11, actually it is the 3000A° BC
+        #    self.Lbol = 0.94661791*self.LogL2500 + 17.31730527 #Assumes Lusso+10 x-ray-to-Uv ratio
+        #    self.Lbol = 10**self.Lbol
         
         return None
     
